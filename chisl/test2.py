@@ -1,120 +1,93 @@
 import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 
-def progon(a, b, c, d):
-    n = len(d)
-    c_prime = np.zeros(n - 1)
-    d_prime = np.zeros(n)
 
-    c_prime[0] = c[0] / b[0]
-    d_prime[0] = d[0] / b[0]
+def heaviside(x):
+    if x < 0:
+        return 0.0
+    elif x == 0:
+        return 0.5
+    else:
+        return 1.0
 
-    for i in range(1, n - 1):
-        c_prime[i] = c[i] / (b[i] - a[i - 1] * c_prime[i - 1])
+l = 2
+a = 5
+omega = 2 * np.pi
+T = 0.1
 
-    for i in range(1, n):
-        d_prime[i] = (d[i] - a[i - 1] * d_prime[i - 1]) / (b[i] - a[i - 1] * c_prime[i - 1])
+h = 0.01
 
-    x = np.zeros(n)
-    x[-1] = d_prime[-1]
+tau = 0.8 * h / a
 
-    for i in range(n - 2, -1, -1):
-        x[i] = d_prime[i] - c_prime[i] * x[i + 1]
+# abs(a * cos(omega * t)) * tau/h <=1
 
-    return x
-
-
-def green_function(x, xi, t):
-    if t == 0:
-        x_0 = np.zeros(N)
-        j = np.argmin(np.abs(x_grid - xi))
-        x_0[j] = 1.0 / h
-        return x_0
-    result = np.zeros_like(x)
-    result = 1 / (2 * np.sqrt(np.pi * kappa * t)) * np.exp(-(x - xi) ** 2 / (4 * kappa * t))
-    return result
+x = np.linspace(0, l, int(l/h) + 1)
 
 
-# Параметры задачи
-A = 0.1
-B = 20.0
-N = 501
-T = 1.0
-K = 1000
-xi = 11.0
-v = 0.5
-kappa = 10.0
-
-x_grid, h = np.linspace(A, B, N, retstep=True)
-tau = T / K
-t_grid = np.linspace(0.1, T, K + 1)
-print(h, tau)
-
-u_num = np.zeros((K + 1, N))
-j_xi = np.argmin(np.abs(x_grid - xi))
-u_num[0, j_xi] = 1.0 / h
-err = [np.max(np.abs(u_num[0] - green_function(x_grid, xi, 0)))]
-
-u_num[:, 0] = 0.0
-u_num[:, -1] = 0.0
-
-for k in range(K):
-    a = np.zeros(N - 2)
-    b = np.zeros(N - 2)
-    c = np.zeros(N - 2)
-    d = np.zeros(N - 2)
-
-    for j in range(1, N - 1):
-        x_j = x_grid[j]
-        coef_implicit = v * tau * kappa / h ** 2
-        coef_explicit = (1 - v) * tau * kappa / h ** 2
-
-        if j == 1:
-            a[j - 1] = 0.0
-            b[j - 1] = 1 + coef_implicit
-            c[j - 1] = -coef_implicit / 2
-            explicit_part = (coef_explicit / 2) * (u_num[k, j + 1] - 2 * u_num[k, j] + u_num[k, j - 1])
-            d[j - 1] = u_num[k, j] + explicit_part
-        elif j == N - 2:
-            a[j - 1] = -coef_implicit / 2
-            b[j - 1] = 1 + coef_implicit
-            c[j - 1] = 0.0
-            explicit_part = (coef_explicit / 2) * (u_num[k, j + 1] - 2 * u_num[k, j] + u_num[k, j - 1])
-            d[j - 1] = u_num[k, j] + explicit_part
-        else:
-            a[j - 1] = -coef_implicit / 2
-            b[j - 1] = 1 + coef_implicit
-            c[j - 1] = -coef_implicit / 2
-            explicit_part = (coef_explicit / 2) * (u_num[k, j + 1] - 2 * u_num[k, j] + u_num[k, j - 1])
-            d[j - 1] = u_num[k, j] + explicit_part
-
-    solution = progon(a, b, c, d)
-    u_num[k + 1, 1:-1] = solution
-    current_error = np.max(np.abs(u_num[k + 1] - green_function(x_grid, xi, t_grid[k + 1])))
-    err.append(current_error)
+def phi(x):
+    #return np.sin(2 * np.pi * x / l)
+    return np.where((x > 0.3*l) & (x < 0.7*l), 1.0, 0.0)
 
 
-fig, ax = plt.subplots(dpi=150)
-line_num, = ax.plot(x_grid, u_num[0], 'r--', label='Численное решение')
-line_true, = ax.plot(x_grid, green_function(x_grid, xi, 0), 'b-', label='Аналитическое решение')
-ax.set_xlim(A, B)
-ax.set_ylim(-0.1, 1.1)
+def u_ext(x, t):
+    return phi((x - (a / omega) * np.sin(omega * t)) % l)
+
+
+u_curr = phi(x)
+
+exact = u_ext(x, 0)
+
+
+fig, ax = plt.subplots(figsize=(16, 7))
+line1, = ax.plot(x, u_curr, '-', label="Численное решение")
+line2, = ax.plot(x, exact, '-.', label="Точное решение")
+ax.set_xlim(0, l)
+ax.set_ylim(-2, 2)
 ax.set_xlabel("x")
 ax.set_ylabel("u")
+title = ax.set_title("Решение при t = 0.0")
+ax.grid(True)
 ax.legend()
 
 
+moment = tau
+
 def update(frame):
-    t = t_grid[frame]
-    line_num.set_ydata(u_num[frame])
-    line_true.set_ydata(green_function(x_grid, xi, t))
-    ax.set_title(f"t = {t:.2f}")
-    return line_num, line_true,
+    global u_curr, moment, exact
+
+    if moment >= T + tau:
+        return line1, line2, title
+
+    c = a * np.cos(omega * (moment + tau / 2))
+
+    F = np.zeros(len(u_curr) + 1)
+
+    F[1:-1] = c * (heaviside(c) * u_curr[:-1] + heaviside(-c) * u_curr[1:])
+
+    F[0] = F[-3]
+    F[-1] = F[2]
+
+    #print(F_max)
+    #print(F_min)
+
+    exact = u_ext(x, moment)
 
 
+    u_curr = u_curr - tau * (F[1:] - F[:-1]) / h
 
-ani = FuncAnimation(fig, update, frames=K + 1, interval=50)
-print(f"Максимальная ошибка на последнем шаге: {err[-1]:.6f}")
+    moment += tau
+
+    line1.set_ydata(u_curr)
+    line2.set_ydata(exact)
+    title.set_text("Решение при t = %.3f" % moment)
+
+    return line1, line2, title
+
+
+ani = FuncAnimation(fig, update, frames=int(T / tau), interval=100, blit=True)
+
 plt.show()
+
+print(np.mean(abs(u_curr - exact)))
